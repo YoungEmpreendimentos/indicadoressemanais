@@ -38,8 +38,8 @@
 <body class="p-4 sm:p-6 lg:p-8">
 
     <header class="text-center mb-10">
-        <h1 class="text-3xl sm:text-4xl font-bold text-gray-100" style="font-family: 'Space Grotesk', sans-serif;">Indicadores de desempenho (KPI's)</h1>
-        <p class="text-gray-400 mt-2" style="font-family: 'Be Vietnam Pro', sans-serif;">Acompanhamento de métricas por equipe</p>
+        <h1 class="text-3xl sm:text-4xl font-bold text-gray-100" style="font-family: 'Space Grotesk', sans-serif;">Indicadores - 2025/2 semanais</h1>
+        <p class="text-gray-400 mt-2" style="font-family: 'Be Vietnam Pro', sans-serif;">Acompanhamento de métricas por equipe e responsável</p>
     </header>
 
     <section id="filters" class="mb-8 p-4 bg-[#112240] rounded-lg border border-[#233554] shadow-lg">
@@ -55,8 +55,10 @@
                 <input type="text" id="indicator-search" placeholder="Digite o nome do indicador..." class="w-full p-2 bg-[#0a192f] border border-[#233554] text-gray-200 rounded-md shadow-sm focus:ring-[#fe5009] focus:border-[#fe5009]">
             </div>
             <div>
-                <label for="responsible-search" class="block text-sm font-medium text-gray-300 mb-1" style="font-family: 'Be Vietnam Pro', sans-serif;">Filtrar por Responsável</label>
-                <input type="text" id="responsible-search" placeholder="Digite o nome do responsável..." class="w-full p-2 bg-[#0a192f] border border-[#233554] text-gray-200 rounded-md shadow-sm focus:ring-[#fe5009] focus:border-[#fe5009]">
+                <label for="responsible-filter" class="block text-sm font-medium text-gray-300 mb-1" style="font-family: 'Be Vietnam Pro', sans-serif;">Filtrar por Responsável</label>
+                <select id="responsible-filter" class="w-full p-2 bg-[#0a192f] border border-[#233554] text-gray-200 rounded-md shadow-sm focus:ring-[#fe5009] focus:border-[#fe5009]">
+                    <option value="all">Todos os Responsáveis</option>
+                    </select>
             </div>
         </div>
     </section>
@@ -75,10 +77,12 @@
                 .then(response => response.json())
                 .then(data => {
                     populateTeamFilter(data);
+                    populateResponsibleFilter(data);
                     renderDashboard(data);
+                    
                     document.getElementById('team-filter').addEventListener('change', () => applyFilters(data));
                     document.getElementById('indicator-search').addEventListener('input', () => applyFilters(data));
-                    document.getElementById('responsible-search').addEventListener('input', () => applyFilters(data));
+                    document.getElementById('responsible-filter').addEventListener('change', () => applyFilters(data));
                 })
                 .catch(error => {
                     console.error('Erro ao buscar dados da planilha:', error);
@@ -86,7 +90,6 @@
                 });
         });
 
-        // Funções auxiliares
         function groupBy(array, key) {
             return array.reduce((result, currentValue) => {
                 (result[currentValue[key]] = result[currentValue[key]] || []).push(currentValue);
@@ -105,7 +108,6 @@
             return Number(value);
         }
         
-        // ATUALIZADO: Função renderDashboard agora é totalmente dinâmica
         function renderDashboard(data) {
             const dashboardContainer = document.getElementById('dashboard-container');
             dashboardContainer.innerHTML = '';
@@ -124,7 +126,7 @@
                 chartsGrid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
 
                 teamData.forEach((kpi) => {
-                    if (!kpi.Indicador) return; // Pula linhas sem indicador
+                    if (!kpi.Indicador) return; 
 
                     const chartWrapper = document.createElement('div');
                     chartWrapper.className = 'bg-[#112240] p-4 rounded-lg border border-[#233554] shadow-lg';
@@ -149,7 +151,6 @@
                         };
                     }
 
-                    // LÓGICA DINÂMICA PARA PEGAR OS DADOS E RÓTULOS
                     const allKeys = Object.keys(kpi);
                     const dataKeys = allKeys
                         .filter(key => key === 'Inicial' || key.toUpperCase().startsWith('W'))
@@ -193,7 +194,7 @@
                         datasets.push({
                             type: 'line',
                             label: `Meta (${kpi.Meta})`,
-                            data: Array(chartLabels.length).fill(metaValue), // Linha da meta dinâmica
+                            data: Array(chartLabels.length).fill(metaValue),
                             borderColor: '#fe5009',
                             backgroundColor: 'transparent',
                             borderWidth: 2,
@@ -262,7 +263,7 @@
         function applyFilters(kpiData) {
             const teamFilterValue = document.getElementById('team-filter').value;
             const indicatorSearchValue = document.getElementById('indicator-search').value.toLowerCase();
-            const responsibleSearchValue = document.getElementById('responsible-search').value.toLowerCase();
+            const responsibleFilterValue = document.getElementById('responsible-filter').value;
             let filteredData = kpiData;
 
             if (teamFilterValue !== 'all') {
@@ -273,10 +274,8 @@
                     item.Indicador && item.Indicador.toLowerCase().includes(indicatorSearchValue)
                 );
             }
-            if (responsibleSearchValue) {
-                filteredData = filteredData.filter(item =>
-                    item.Responsável && item.Responsável.toLowerCase().includes(responsibleSearchValue)
-                );
+            if (responsibleFilterValue !== 'all') {
+                filteredData = filteredData.filter(item => item.Responsável === responsibleFilterValue);
             }
             renderDashboard(filteredData);
         }
@@ -292,6 +291,20 @@
                 option.value = team;
                 option.textContent = team;
                 teamFilter.appendChild(option);
+            });
+        }
+
+        function populateResponsibleFilter(kpiData) {
+            const responsibleFilter = document.getElementById('responsible-filter');
+            while (responsibleFilter.options.length > 1) {
+                responsibleFilter.remove(1);
+            }
+            const responsibles = [...new Set(kpiData.map(item => item.Responsável).filter(r => r))].sort();
+            responsibles.forEach(responsible => {
+                const option = document.createElement('option');
+                option.value = responsible;
+                option.textContent = responsible;
+                responsibleFilter.appendChild(option);
             });
         }
     </script>
