@@ -112,9 +112,7 @@
             lightText: '#616161',
             gridColor: '#e0e0e0',
             defaultBar: 'rgba(189, 189, 189, 0.7)', // Cinza para barras sem meta
-            success: 'rgba(52, 168, 83, 0.7)',
-            warning: 'rgba(251, 188, 5, 0.7)',
-            danger: 'rgba(234, 67, 53, 0.7)',
+            barColor: 'rgba(33, 33, 33, 0.7)', // Preto para todas as barras
         };
 
         // Armazena os dados originais para evitar múltiplas chamadas à API
@@ -248,8 +246,7 @@
                             return numA - numB;
                         });
                     
-                    // Limita os dados com base no slider
-                    const visibleDataKeys = dataKeys.slice(0, weeksToShow + 1); // +1 para incluir 'Inicial'
+                    const visibleDataKeys = dataKeys.slice(0, weeksToShow + 1); 
 
                     const chartLabels = visibleDataKeys;
                     const chartData = visibleDataKeys.map(key => parseValue(kpi[key]));
@@ -257,24 +254,13 @@
                     const metaValue = parseMeta(kpi.Meta);
                     const datasets = [{
                         data: chartData,
+                        // --- LÓGICA DE COR ATUALIZADA ---
                         backgroundColor: (context) => {
                             const value = context.dataset.data[context.dataIndex];
-                            if (metaValue === null || value === null) return brandColors.defaultBar;
-                            
-                            let goalType = kpi.Meta.toString();
-                            goalType = goalType.replace('≥', '>=').replace('≤', '<=');
-
-                            if (goalType.includes('<=')) {
-                                return value <= metaValue ? brandColors.success : brandColors.danger;
-                            } else if (goalType.includes('>=')) {
-                                return value >= metaValue ? brandColors.success : brandColors.danger;
-                            } else if (goalType.includes('<')) {
-                                return value < metaValue ? brandColors.success : brandColors.danger;
-                            } else if (goalType.includes('>')) {
-                                return value > metaValue ? brandColors.success : brandColors.danger;
-                            } else { 
-                                return value >= metaValue ? brandColors.success : brandColors.warning;
+                            if (value === null) {
+                                return brandColors.defaultBar; // Cinza para valores nulos
                             }
+                            return brandColors.barColor; // Preto para todas as outras barras
                         },
                         borderColor: 'transparent',
                         borderWidth: 1,
