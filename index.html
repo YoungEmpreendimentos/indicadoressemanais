@@ -105,20 +105,7 @@
             return Number(value);
         }
         
-        function getResponsible(indicatorString) {
-            if (typeof indicatorString !== 'string') return null;
-            const match = indicatorString.match(/\(([^)]+)\)/);
-            // Retorna o nome com a primeira letra de cada palavra em maiúscula
-            return match ? match[1].toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) : null;
-        }
-
-        // NOVO: Função para pegar apenas o nome do indicador (sem o responsável)
-        function getCleanIndicator(indicatorString) {
-            if (typeof indicatorString !== 'string') return 'Indicador sem nome';
-            return indicatorString.split('(')[0].trim();
-        }
-
-        // ATUALIZADO: Função renderDashboard agora separa título e subtítulo
+        // ATUALIZADO: Função renderDashboard agora lê o campo "Responsável" diretamente
         function renderDashboard(data) {
             const dashboardContainer = document.getElementById('dashboard-container');
             dashboardContainer.innerHTML = '';
@@ -146,11 +133,12 @@
                     chartWrapper.appendChild(chartContainer);
                     chartsGrid.appendChild(chartWrapper);
                     
-                    const responsible = getResponsible(kpi.Indicador);
-                    const indicatorTitle = getCleanIndicator(kpi.Indicador);
+                    // Lógica simplificada: lê os campos diretamente dos dados
+                    const indicatorTitle = kpi.Indicador;
+                    const responsible = kpi.Responsável; // Lê da coluna "Responsável"
                     
                     let subtitleConfig = { display: false };
-                    if (responsible) {
+                    if (responsible) { // Se houver um responsável na coluna H
                         subtitleConfig = {
                             display: true,
                             text: `Responsável: ${responsible}`,
@@ -210,12 +198,12 @@
                             plugins: {
                                 title: {
                                     display: true,
-                                    text: indicatorTitle, // Título principal
+                                    text: indicatorTitle,
                                     font: { size: 16, weight: '700', family: "'Space Grotesk', sans-serif" },
                                     color: '#ccd6f6',
                                     padding: { top: 10, bottom: 0 }
                                 },
-                                subtitle: subtitleConfig, // Subtítulo com o responsável
+                                subtitle: subtitleConfig,
                                 legend: {
                                     position: 'bottom',
                                     labels: { 
@@ -254,6 +242,7 @@
             }
         }
 
+        // ATUALIZADO: Função de filtros lendo o campo "Responsável" diretamente
         function applyFilters(kpiData) {
             const teamFilterValue = document.getElementById('team-filter').value;
             const indicatorSearchValue = document.getElementById('indicator-search').value.toLowerCase();
@@ -265,14 +254,13 @@
             }
             if (indicatorSearchValue) {
                 filteredData = filteredData.filter(item => 
-                    item.Indicador && getCleanIndicator(item.Indicador).toLowerCase().includes(indicatorSearchValue)
+                    item.Indicador && item.Indicador.toLowerCase().includes(indicatorSearchValue)
                 );
             }
             if (responsibleSearchValue) {
-                filteredData = filteredData.filter(item => {
-                    const responsible = getResponsible(item.Indicador);
-                    return responsible && responsible.toLowerCase().includes(responsibleSearchValue);
-                });
+                filteredData = filteredData.filter(item =>
+                    item.Responsável && item.Responsável.toLowerCase().includes(responsibleSearchValue)
+                );
             }
             renderDashboard(filteredData);
         }
