@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de KPI's</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: #0a192f; /* Fallback */
+            background-image: linear-gradient(135deg, #0a192f 0%, #172a45 100%);
+            color: #ccd6f6;
+        }
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+        /* Custom scrollbar for better dark theme integration */
+        ::-webkit-scrollbar {
+            width: 12px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a192f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #233554;
+            border-radius: 20px;
+            border: 3px solid #0a192f;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-6 lg:p-8">
+
+    <header class="text-center mb-10">
+        <h1 class="text-3xl sm:text-4xl font-bold text-gray-100" style="font-family: 'Space Grotesk', sans-serif;">Indicadores de desempenho (KPI's)</h1>
+        <p class="text-gray-400 mt-2" style="font-family: 'Be Vietnam Pro', sans-serif;">Acompanhamento de métricas por equipe</p>
+    </header>
+
+    <section id="filters" class="mb-8 p-4 bg-[#112240] rounded-lg border border-[#233554] shadow-lg">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label for="team-filter" class="block text-sm font-medium text-gray-300 mb-1" style="font-family: 'Be Vietnam Pro', sans-serif;">Filtrar por Time</label>
+                <select id="team-filter" class="w-full p-2 bg-[#0a192f] border border-[#233554] text-gray-200 rounded-md shadow-sm focus:ring-[#fe5009] focus:border-[#fe5009]">
+                    <option value="all">Todos os Times</option>
+                    </select>
+            </div>
+            <div>
+                <label for="indicator-search" class="block text-sm font-medium text-gray-300 mb-1" style="font-family: 'Be Vietnam Pro', sans-serif;">Buscar por Indicador</label>
+                <input type="text" id="indicator-search" placeholder="Digite o nome do indicador..." class="w-full p-2 bg-[#0a192f] border border-[#233554] text-gray-200 rounded-md shadow-sm focus:ring-[#fe5009] focus:border-[#fe5009]">
+            </div>
+        </div>
+    </section>
+
+    <main id="dashboard-container" class="space-y-12">
+        </main>
+
+    <script>
+        // ===================================================================================
+        // CÓDIGO MODIFICADO PARA BUSCAR DADOS DA PLANILHA
+        // ===================================================================================
+
+        // URL do seu App da Web do Google Script.
+        const webAppUrl = 'https://script.google.com/macros/s/AKfycbxLvww5ZU_PtYrEGGAc3ZFOXFVU3lQGDcF0ZDnxs7BzbmqignLcOdwkEMSR6YbNFb8J/exec';
+
+        // Função que será executada quando a página carregar
+        document.addEventListener('DOMContentLoaded', () => {
+            // Mostra uma mensagem de carregamento enquanto busca os dados
+            const dashboardContainer = document.getElementById('dashboard-container');
+            dashboardContainer.innerHTML = `<p class="text-center text-gray-400" style="font-family: 'Be Vietnam Pro', sans-serif;">Carregando indicadores da planilha...</p>`;
+
+            // Busca os dados da sua planilha
+            fetch(webAppUrl)
+                .then(response => response.json())
+                .then(data => {
+                    // Quando os dados chegarem, inicia o painel com eles
+                    populateTeamFilter(data);
+                    renderDashboard(data);
+                    document.getElementById('team-filter').addEventListener('change', () => applyFilters(data));
+                    document.getElementById('indicator-search').addEventListener('input', () => applyFilters(data));
+                })
+                .catch(error => {
+                    console.error('Erro ao buscar dados da planilha:', error);
+                    dashboardContainer.innerHTML = `<p class="text-center text-red-400" style="font-family: 'Be Vietnam Pro', sans-serif;">Falha ao carregar os indicadores. Verifique a URL e as permissões do script na planilha.</p>`;
+                });
+        });
+
+
+        // ===================================================================================
+        // FUNÇÕES ORIGINAIS DO DASHBOARD (com pequenas modificações)
+        // ===================================================================================
+
+        // Funções auxiliares
+        function groupBy(array, key) {
+            return array.reduce((result, currentValue) => {
+                (result[currentValue[key]] = result[currentValue[key]] || []).push(currentValue);
+                return result;
+            }, {});
+        }
+
+        function parseMeta(metaString) {
+            if (typeof metaString !== 'string' || metaString === '-' || metaString === 'N/A') return null;
+            const match = metaString.match(/(\d+(\.\d+)?)/);
+            return match ? parseFloat(match[0]) : null;
+        }
+
+        function parseValue(value) {
+            if (value === 'N/A' || value === null || value === undefined || value === '') return null;
+            return Number(value);
+        }
+
+        // Função principal para renderizar os gráficos
+        function renderDashboard(data) {
+            const dashboardContainer = document.getElementById('dashboard-container');
+            dashboardContainer.innerHTML = '';
+            const groupedByTeam = groupBy(data, 'Time');
+
+            if (Object.keys(groupedByTeam).length === 0) {
+                dashboardContainer.innerHTML = `<p class="text-center text-gray-400" style="font-family: 'Be Vietnam Pro', sans-serif;">Nenhum indicador encontrado para os filtros selecionados.</p>`;
+                return;
+            }
+
+            for (const teamName in groupedByTeam) {
+                const teamData = groupedByTeam[teamName];
+                const teamSection = document.createElement('section');
+                teamSection.innerHTML = `<h2 class="text-2xl font-bold text-gray-100 border-b-2 border-[#fe5009] pb-2 mb-6" style="font-family: 'Space Grotesk', sans-serif;">${teamName}</h2>`;
+                const chartsGrid = document.createElement('div');
+                chartsGrid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
+
+                teamData.forEach((kpi) => {
+                    const chartWrapper = document.createElement('div');
+                    chartWrapper.className = 'bg-[#112240] p-4 rounded-lg border border-[#233554] shadow-lg';
+                    const chartContainer = document.createElement('div');
+                    chartContainer.className = 'chart-container';
+                    const canvas = document.createElement('canvas');
+                    chartContainer.appendChild(canvas);
+                    chartWrapper.appendChild(chartContainer);
+                    chartsGrid.appendChild(chartWrapper);
+
+                    const labels = ['Inicial', 'W1', 'W2'];
+                    const weeklyData = [parseValue(kpi.Inicial), parseValue(kpi.W1), parseValue(kpi.W2)];
+                    const metaValue = parseMeta(kpi.Meta);
+                    const datasets = [{
+                        label: 'Evolução Semanal',
+                        data: weeklyData,
+                        backgroundColor: (context) => {
+                            const value = context.dataset.data[context.dataIndex];
+                            if (metaValue === null || value === null) return 'rgba(0, 188, 188, 0.7)'; // #00bcbc
+                            
+                            const green = 'rgba(52, 168, 83, 0.7)';
+                            const yellow = 'rgba(251, 188, 5, 0.7)';
+                            const red = 'rgba(234, 67, 53, 0.7)';
+                            
+                            const goalType = kpi.Meta.toString();
+                            if (goalType.startsWith('<=')) {
+                                return value <= metaValue ? green : red;
+                            } else if (goalType.startsWith('>=')) {
+                                return value >= metaValue ? green : red;
+                            } else {
+                                return value >= metaValue ? green : yellow;
+                            }
+                        },
+                        borderColor: '#00bcbc',
+                        borderWidth: 1,
+                        barPercentage: 0.6,
+                        categoryPercentage: 0.7,
+                    }];
+
+                    if (metaValue !== null) {
+                        datasets.push({
+                            type: 'line',
+                            label: `Meta (${kpi.Meta})`,
+                            data: [metaValue, metaValue, metaValue],
+                            borderColor: '#fe5009',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            borderDash: [5, 5],
+                            fill: false,
+                        });
+                    }
+
+                    new Chart(canvas, {
+                        type: 'bar',
+                        data: { labels, datasets },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: kpi.Indicador,
+                                    font: { size: 16, weight: '700', family: "'Space Grotesk', sans-serif" },
+                                    color: '#ccd6f6',
+                                    padding: { bottom: 15 }
+                                },
+                                legend: {
+                                    position: 'bottom',
+                                    labels: { 
+                                        color: '#8892b0',
+                                        boxWidth: 15, 
+                                        padding: 20, 
+                                        font: { size: 12, family: "'Be Vietnam Pro', sans-serif" } 
+                                    }
+                                },
+                                tooltip: {
+                                    backgroundColor: '#0a192f',
+                                    titleColor: '#e6f1ff',
+                                    bodyColor: '#ccd6f6',
+                                    borderColor: '#fe5009',
+                                    borderWidth: 1,
+                                    padding: 10,
+                                    cornerRadius: 4,
+                                }
+                            },
+                            scales: {
+                                y: { 
+                                    beginAtZero: true, 
+                                    grid: { color: '#233554' }, 
+                                    ticks: { color: '#8892b0', font: { family: "'Be Vietnam Pro', sans-serif" } } 
+                                },
+                                x: { 
+                                    grid: { display: false }, 
+                                    ticks: { color: '#8892b0', font: { family: "'Be Vietnam Pro', sans-serif" } } 
+                                }
+                            }
+                        }
+                    });
+                });
+                teamSection.appendChild(chartsGrid);
+                dashboardContainer.appendChild(teamSection);
+            }
+        }
+
+        // Funções de filtro e inicialização
+        function applyFilters(kpiData) {
+            const teamFilterValue = document.getElementById('team-filter').value;
+            const indicatorSearchValue = document.getElementById('indicator-search').value.toLowerCase();
+            let filteredData = kpiData;
+
+            if (teamFilterValue !== 'all') {
+                filteredData = filteredData.filter(item => item.Time === teamFilterValue);
+            }
+            if (indicatorSearchValue) {
+                filteredData = filteredData.filter(item => item.Indicador.toLowerCase().includes(indicatorSearchValue));
+            }
+            renderDashboard(filteredData);
+        }
+
+        function populateTeamFilter(kpiData) {
+            const teamFilter = document.getElementById('team-filter');
+            // Limpa opções antigas, exceto a primeira ("Todos os Times")
+            while (teamFilter.options.length > 1) {
+                teamFilter.remove(1);
+            }
+            const teams = [...new Set(kpiData.map(item => item.Time))].sort();
+            teams.forEach(team => {
+                const option = document.createElement('option');
+                option.value = team;
+                option.textContent = team;
+                teamFilter.appendChild(option);
+            });
+        }
+
+    </script>
+
+</body>
+</html>
