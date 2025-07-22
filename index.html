@@ -38,6 +38,11 @@
         input, select {
             font-family: 'Be Vietnam Pro', sans-serif;
         }
+        
+        /* Estiliza o slider com a cor da marca */
+        input[type=range] {
+            accent-color: var(--brand-orange);
+        }
 
         /* Scrollbar customizada para o tema claro */
         ::-webkit-scrollbar {
@@ -65,7 +70,7 @@
 
     <!-- Seção de Filtros -->
     <section id="filters" class="mb-8 p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
             <div>
                 <label for="team-filter" class="block text-sm font-medium text-gray-700 mb-1">Filtrar por Time</label>
                 <select id="team-filter" class="w-full p-2 bg-gray-50 border border-gray-300 text-gray-900 rounded-md shadow-sm focus:ring-[var(--brand-orange)] focus:border-[var(--brand-orange)]">
@@ -81,6 +86,12 @@
                 <select id="responsible-filter" class="w-full p-2 bg-gray-50 border border-gray-300 text-gray-900 rounded-md shadow-sm focus:ring-[var(--brand-orange)] focus:border-[var(--brand-orange)]">
                     <option value="all">Todos os Responsáveis</option>
                 </select>
+            </div>
+            <div>
+                <label for="weeks-slider" class="block text-sm font-medium text-gray-700 mb-1">
+                    Exibir Semanas: <span id="weeks-count" class="font-bold text-[var(--brand-orange)]">10</span>
+                </label>
+                <input type="range" id="weeks-slider" min="1" max="10" value="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
             </div>
         </div>
     </section>
@@ -106,6 +117,9 @@
             danger: 'rgba(234, 67, 53, 0.7)',
         };
 
+        // Armazena os dados originais para evitar múltiplas chamadas à API
+        let originalData = [];
+
         document.addEventListener('DOMContentLoaded', () => {
             const dashboardContainer = document.getElementById('dashboard-container');
             dashboardContainer.innerHTML = `<p class="text-center text-gray-500">Carregando indicadores da planilha...</p>`;
@@ -113,19 +127,52 @@
             fetch(webAppUrl)
                 .then(response => response.json())
                 .then(data => {
-                    populateTeamFilter(data);
-                    populateResponsibleFilter(data);
-                    renderDashboard(data);
+                    originalData = data;
+                    setupControls(data);
+                    applyFilters();
                     
-                    document.getElementById('team-filter').addEventListener('change', () => applyFilters(data));
-                    document.getElementById('indicator-search').addEventListener('input', () => applyFilters(data));
-                    document.getElementById('responsible-filter').addEventListener('change', () => applyFilters(data));
+                    document.getElementById('team-filter').addEventListener('change', applyFilters);
+                    document.getElementById('indicator-search').addEventListener('input', applyFilters);
+                    document.getElementById('responsible-filter').addEventListener('change', applyFilters);
+                    document.getElementById('weeks-slider').addEventListener('input', (e) => {
+                        document.getElementById('weeks-count').textContent = e.target.value;
+                        applyFilters();
+                    });
                 })
                 .catch(error => {
                     console.error('Erro ao buscar dados da planilha:', error);
                     dashboardContainer.innerHTML = `<p class="text-center text-red-500">Falha ao carregar os indicadores. Verifique a URL e as permissões do script na planilha.</p>`;
                 });
         });
+
+        function setupControls(data) {
+            populateTeamFilter(data);
+            populateResponsibleFilter(data);
+            setupWeekSlider(data);
+        }
+
+        function setupWeekSlider(data) {
+            const weeksSlider = document.getElementById('weeks-slider');
+            const weeksCount = document.getElementById('weeks-count');
+
+            const weekKeys = new Set();
+            data.forEach(item => {
+                Object.keys(item).forEach(key => {
+                    if (key.toUpperCase().startsWith('W')) {
+                        weekKeys.add(key);
+                    }
+                });
+            });
+
+            const maxWeeks = weekKeys.size;
+            if (maxWeeks > 0) {
+                weeksSlider.max = maxWeeks;
+                // Inicia com 10 semanas ou o máximo disponível, se for menor
+                const initialWeeks = Math.min(10, maxWeeks);
+                weeksSlider.value = initialWeeks;
+                weeksCount.textContent = initialWeeks;
+            }
+        }
 
         function groupBy(array, key) {
             return array.reduce((result, currentValue) => {
@@ -147,7 +194,9 @@
         
         function renderDashboard(data) {
             const dashboardContainer = document.getElementById('dashboard-container');
+            const weeksToShow = parseInt(document.getElementById('weeks-slider').value, 10);
             dashboardContainer.innerHTML = '';
+            
             const groupedByTeam = groupBy(data, 'Time');
 
             if (Object.keys(groupedByTeam).length === 0) {
@@ -198,9 +247,12 @@
                             const numB = parseInt(b.substring(1), 10);
                             return numA - numB;
                         });
+                    
+                    // Limita os dados com base no slider
+                    const visibleDataKeys = dataKeys.slice(0, weeksToShow + 1); // +1 para incluir 'Inicial'
 
-                    const chartLabels = dataKeys;
-                    const chartData = dataKeys.map(key => parseValue(kpi[key]));
+                    const chartLabels = visibleDataKeys;
+                    const chartData = visibleDataKeys.map(key => parseValue(kpi[key]));
                     
                     const metaValue = parseMeta(kpi.Meta);
                     const datasets = [{
@@ -275,8 +327,6 @@
                                         boxWidth: 15, 
                                         padding: 20, 
                                         font: { size: 12, family: "'Be Vietnam Pro', sans-serif" },
-                                        // --- LEGENDA SIMPLIFICADA ---
-                                        // Filtra a legenda para mostrar apenas o item da linha de meta.
                                         filter: function(item, chart) {
                                             return item.datasetIndex === 1;
                                         }
@@ -311,11 +361,12 @@
             }
         }
 
-        function applyFilters(kpiData) {
+        function applyFilters() {
             const teamFilterValue = document.getElementById('team-filter').value;
             const indicatorSearchValue = document.getElementById('indicator-search').value.toLowerCase();
             const responsibleFilterValue = document.getElementById('responsible-filter').value;
-            let filteredData = kpiData;
+            
+            let filteredData = originalData;
 
             if (teamFilterValue !== 'all') {
                 filteredData = filteredData.filter(item => item.Time === teamFilterValue);
@@ -333,9 +384,6 @@
 
         function populateTeamFilter(kpiData) {
             const teamFilter = document.getElementById('team-filter');
-            while (teamFilter.options.length > 1) {
-                teamFilter.remove(1);
-            }
             const teams = [...new Set(kpiData.map(item => item.Time).filter(t => t))].sort();
             teams.forEach(team => {
                 const option = document.createElement('option');
@@ -347,9 +395,6 @@
 
         function populateResponsibleFilter(kpiData) {
             const responsibleFilter = document.getElementById('responsible-filter');
-            while (responsibleFilter.options.length > 1) {
-                responsibleFilter.remove(1);
-            }
             const responsibles = [...new Set(kpiData.map(item => item.Responsável).filter(r => r))].sort();
             responsibles.forEach(responsible => {
                 const option = document.createElement('option');
