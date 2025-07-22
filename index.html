@@ -43,16 +43,20 @@
     </header>
 
     <section id="filters" class="mb-8 p-4 bg-[#112240] rounded-lg border border-[#233554] shadow-lg">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
                 <label for="team-filter" class="block text-sm font-medium text-gray-300 mb-1" style="font-family: 'Be Vietnam Pro', sans-serif;">Filtrar por Time</label>
                 <select id="team-filter" class="w-full p-2 bg-[#0a192f] border border-[#233554] text-gray-200 rounded-md shadow-sm focus:ring-[#fe5009] focus:border-[#fe5009]">
                     <option value="all">Todos os Times</option>
-                    </select>
+                </select>
             </div>
             <div>
                 <label for="indicator-search" class="block text-sm font-medium text-gray-300 mb-1" style="font-family: 'Be Vietnam Pro', sans-serif;">Buscar por Indicador</label>
                 <input type="text" id="indicator-search" placeholder="Digite o nome do indicador..." class="w-full p-2 bg-[#0a192f] border border-[#233554] text-gray-200 rounded-md shadow-sm focus:ring-[#fe5009] focus:border-[#fe5009]">
+            </div>
+            <div>
+                <label for="responsible-search" class="block text-sm font-medium text-gray-300 mb-1" style="font-family: 'Be Vietnam Pro', sans-serif;">Filtrar por Responsável</label>
+                <input type="text" id="responsible-search" placeholder="Digite o nome do responsável..." class="w-full p-2 bg-[#0a192f] border border-[#233554] text-gray-200 rounded-md shadow-sm focus:ring-[#fe5009] focus:border-[#fe5009]">
             </div>
         </div>
     </section>
@@ -61,39 +65,26 @@
         </main>
 
     <script>
-        // ===================================================================================
-        // CÓDIGO MODIFICADO PARA BUSCAR DADOS DA PLANILHA
-        // ===================================================================================
-
-        // URL do seu App da Web do Google Script.
         const webAppUrl = 'https://script.google.com/macros/s/AKfycbxLvww5ZU_PtYrEGGAc3ZFOXFVU3lQGDcF0ZDnxs7BzbmqignLcOdwkEMSR6YbNFb8J/exec';
 
-        // Função que será executada quando a página carregar
         document.addEventListener('DOMContentLoaded', () => {
-            // Mostra uma mensagem de carregamento enquanto busca os dados
             const dashboardContainer = document.getElementById('dashboard-container');
             dashboardContainer.innerHTML = `<p class="text-center text-gray-400" style="font-family: 'Be Vietnam Pro', sans-serif;">Carregando indicadores da planilha...</p>`;
 
-            // Busca os dados da sua planilha
             fetch(webAppUrl)
                 .then(response => response.json())
                 .then(data => {
-                    // Quando os dados chegarem, inicia o painel com eles
                     populateTeamFilter(data);
                     renderDashboard(data);
                     document.getElementById('team-filter').addEventListener('change', () => applyFilters(data));
                     document.getElementById('indicator-search').addEventListener('input', () => applyFilters(data));
+                    document.getElementById('responsible-search').addEventListener('input', () => applyFilters(data));
                 })
                 .catch(error => {
                     console.error('Erro ao buscar dados da planilha:', error);
                     dashboardContainer.innerHTML = `<p class="text-center text-red-400" style="font-family: 'Be Vietnam Pro', sans-serif;">Falha ao carregar os indicadores. Verifique a URL e as permissões do script na planilha.</p>`;
                 });
         });
-
-
-        // ===================================================================================
-        // FUNÇÕES ORIGINAIS DO DASHBOARD (com pequenas modificações)
-        // ===================================================================================
 
         // Funções auxiliares
         function groupBy(array, key) {
@@ -113,8 +104,21 @@
             if (value === 'N/A' || value === null || value === undefined || value === '') return null;
             return Number(value);
         }
+        
+        function getResponsible(indicatorString) {
+            if (typeof indicatorString !== 'string') return null;
+            const match = indicatorString.match(/\(([^)]+)\)/);
+            // Retorna o nome com a primeira letra de cada palavra em maiúscula
+            return match ? match[1].toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) : null;
+        }
 
-        // Função principal para renderizar os gráficos
+        // NOVO: Função para pegar apenas o nome do indicador (sem o responsável)
+        function getCleanIndicator(indicatorString) {
+            if (typeof indicatorString !== 'string') return 'Indicador sem nome';
+            return indicatorString.split('(')[0].trim();
+        }
+
+        // ATUALIZADO: Função renderDashboard agora separa título e subtítulo
         function renderDashboard(data) {
             const dashboardContainer = document.getElementById('dashboard-container');
             dashboardContainer.innerHTML = '';
@@ -141,6 +145,20 @@
                     chartContainer.appendChild(canvas);
                     chartWrapper.appendChild(chartContainer);
                     chartsGrid.appendChild(chartWrapper);
+                    
+                    const responsible = getResponsible(kpi.Indicador);
+                    const indicatorTitle = getCleanIndicator(kpi.Indicador);
+                    
+                    let subtitleConfig = { display: false };
+                    if (responsible) {
+                        subtitleConfig = {
+                            display: true,
+                            text: `Responsável: ${responsible}`,
+                            color: '#8892b0',
+                            font: { size: 14, family: "'Be Vietnam Pro', sans-serif" },
+                            padding: { bottom: 10 }
+                        };
+                    }
 
                     const labels = ['Inicial', 'W1', 'W2'];
                     const weeklyData = [parseValue(kpi.Inicial), parseValue(kpi.W1), parseValue(kpi.W2)];
@@ -150,12 +168,10 @@
                         data: weeklyData,
                         backgroundColor: (context) => {
                             const value = context.dataset.data[context.dataIndex];
-                            if (metaValue === null || value === null) return 'rgba(0, 188, 188, 0.7)'; // #00bcbc
-                            
+                            if (metaValue === null || value === null) return 'rgba(0, 188, 188, 0.7)';
                             const green = 'rgba(52, 168, 83, 0.7)';
                             const yellow = 'rgba(251, 188, 5, 0.7)';
                             const red = 'rgba(234, 67, 53, 0.7)';
-                            
                             const goalType = kpi.Meta.toString();
                             if (goalType.startsWith('<=')) {
                                 return value <= metaValue ? green : red;
@@ -194,11 +210,12 @@
                             plugins: {
                                 title: {
                                     display: true,
-                                    text: kpi.Indicador,
+                                    text: indicatorTitle, // Título principal
                                     font: { size: 16, weight: '700', family: "'Space Grotesk', sans-serif" },
                                     color: '#ccd6f6',
-                                    padding: { bottom: 15 }
+                                    padding: { top: 10, bottom: 0 }
                                 },
+                                subtitle: subtitleConfig, // Subtítulo com o responsável
                                 legend: {
                                     position: 'bottom',
                                     labels: { 
@@ -237,28 +254,35 @@
             }
         }
 
-        // Funções de filtro e inicialização
         function applyFilters(kpiData) {
             const teamFilterValue = document.getElementById('team-filter').value;
             const indicatorSearchValue = document.getElementById('indicator-search').value.toLowerCase();
+            const responsibleSearchValue = document.getElementById('responsible-search').value.toLowerCase();
             let filteredData = kpiData;
 
             if (teamFilterValue !== 'all') {
                 filteredData = filteredData.filter(item => item.Time === teamFilterValue);
             }
             if (indicatorSearchValue) {
-                filteredData = filteredData.filter(item => item.Indicador.toLowerCase().includes(indicatorSearchValue));
+                filteredData = filteredData.filter(item => 
+                    item.Indicador && getCleanIndicator(item.Indicador).toLowerCase().includes(indicatorSearchValue)
+                );
+            }
+            if (responsibleSearchValue) {
+                filteredData = filteredData.filter(item => {
+                    const responsible = getResponsible(item.Indicador);
+                    return responsible && responsible.toLowerCase().includes(responsibleSearchValue);
+                });
             }
             renderDashboard(filteredData);
         }
 
         function populateTeamFilter(kpiData) {
             const teamFilter = document.getElementById('team-filter');
-            // Limpa opções antigas, exceto a primeira ("Todos os Times")
             while (teamFilter.options.length > 1) {
                 teamFilter.remove(1);
             }
-            const teams = [...new Set(kpiData.map(item => item.Time))].sort();
+            const teams = [...new Set(kpiData.map(item => item.Time).filter(t => t))].sort();
             teams.forEach(team => {
                 const option = document.createElement('option');
                 option.value = team;
@@ -266,8 +290,6 @@
                 teamFilter.appendChild(option);
             });
         }
-
     </script>
-
 </body>
 </html>
