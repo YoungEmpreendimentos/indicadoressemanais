@@ -105,7 +105,7 @@
             return Number(value);
         }
         
-        // ATUALIZADO: Função renderDashboard agora lê o campo "Responsável" diretamente
+        // ATUALIZADO: Função renderDashboard agora é totalmente dinâmica
         function renderDashboard(data) {
             const dashboardContainer = document.getElementById('dashboard-container');
             dashboardContainer.innerHTML = '';
@@ -124,6 +124,8 @@
                 chartsGrid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
 
                 teamData.forEach((kpi) => {
+                    if (!kpi.Indicador) return; // Pula linhas sem indicador
+
                     const chartWrapper = document.createElement('div');
                     chartWrapper.className = 'bg-[#112240] p-4 rounded-lg border border-[#233554] shadow-lg';
                     const chartContainer = document.createElement('div');
@@ -133,12 +135,11 @@
                     chartWrapper.appendChild(chartContainer);
                     chartsGrid.appendChild(chartWrapper);
                     
-                    // Lógica simplificada: lê os campos diretamente dos dados
                     const indicatorTitle = kpi.Indicador;
-                    const responsible = kpi.Responsável; // Lê da coluna "Responsável"
+                    const responsible = kpi.Responsável;
                     
                     let subtitleConfig = { display: false };
-                    if (responsible) { // Se houver um responsável na coluna H
+                    if (responsible) {
                         subtitleConfig = {
                             display: true,
                             text: `Responsável: ${responsible}`,
@@ -148,12 +149,25 @@
                         };
                     }
 
-                    const labels = ['Inicial', 'W1', 'W2'];
-                    const weeklyData = [parseValue(kpi.Inicial), parseValue(kpi.W1), parseValue(kpi.W2)];
+                    // LÓGICA DINÂMICA PARA PEGAR OS DADOS E RÓTULOS
+                    const allKeys = Object.keys(kpi);
+                    const dataKeys = allKeys
+                        .filter(key => key === 'Inicial' || key.toUpperCase().startsWith('W'))
+                        .sort((a, b) => {
+                            if (a === 'Inicial') return -1;
+                            if (b === 'Inicial') return 1;
+                            const numA = parseInt(a.substring(1), 10);
+                            const numB = parseInt(b.substring(1), 10);
+                            return numA - numB;
+                        });
+
+                    const chartLabels = dataKeys;
+                    const chartData = dataKeys.map(key => parseValue(kpi[key]));
+                    
                     const metaValue = parseMeta(kpi.Meta);
                     const datasets = [{
                         label: 'Evolução Semanal',
-                        data: weeklyData,
+                        data: chartData,
                         backgroundColor: (context) => {
                             const value = context.dataset.data[context.dataIndex];
                             if (metaValue === null || value === null) return 'rgba(0, 188, 188, 0.7)';
@@ -179,7 +193,7 @@
                         datasets.push({
                             type: 'line',
                             label: `Meta (${kpi.Meta})`,
-                            data: [metaValue, metaValue, metaValue],
+                            data: Array(chartLabels.length).fill(metaValue), // Linha da meta dinâmica
                             borderColor: '#fe5009',
                             backgroundColor: 'transparent',
                             borderWidth: 2,
@@ -191,7 +205,10 @@
 
                     new Chart(canvas, {
                         type: 'bar',
-                        data: { labels, datasets },
+                        data: {
+                            labels: chartLabels,
+                            datasets: datasets
+                        },
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
@@ -242,7 +259,6 @@
             }
         }
 
-        // ATUALIZADO: Função de filtros lendo o campo "Responsável" diretamente
         function applyFilters(kpiData) {
             const teamFilterValue = document.getElementById('team-filter').value;
             const indicatorSearchValue = document.getElementById('indicator-search').value.toLowerCase();
